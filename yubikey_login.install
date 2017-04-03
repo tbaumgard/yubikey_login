@@ -1,0 +1,90 @@
+<?php
+/**
+ * @file yubikey_login.install
+ * Install, update, and uninstall the module.
+ */
+
+/**
+ * Declare the database schema for the module.
+ *
+ * @see hook_schema()
+ */
+function yubikey_login_schema() {
+  $schema['yubikey_login_credentials'] = array(
+    'description' => 'Table to hold YubiKey Login credentials for each user.',
+    'fields' => array(
+      'uid' => array(
+        'description' => 'User ID.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE),
+      'public_identity' => array(
+        'description' => 'YubiKey public identity.',
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE),
+      'encrypted_credentials' => array(
+        'description' => 'YubiKey credentials in encrypted form.',
+        'type' => 'blob',
+        'not null' => TRUE)),
+    'primary key' => array('uid'));
+
+  $schema['yubikey_login_backup_codes'] = array(
+    'description' => 'Table to hold YubiKey Login backup codes for each user.',
+    'fields' => array(
+      'uid' => array(
+        'description' => 'User ID.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE),
+      'hashed_backup_code_1' => array(
+        'description' => 'First hashed backup code.',
+        'type' => 'char',
+        'length' => 60),
+      'hashed_backup_code_2' => array(
+        'description' => 'Second hashed backup code.',
+        'type' => 'char',
+        'length' => 60),
+      'hashed_backup_code_3' => array(
+        'description' => 'Third hashed backup code.',
+        'type' => 'char',
+        'length' => 60),
+      'hashed_backup_code_4' => array(
+        'description' => 'Fourth hashed backup code.',
+        'type' => 'char',
+        'length' => 60),
+      'hashed_backup_code_5' => array(
+        'description' => 'Fifth hashed backup code.',
+        'type' => 'char',
+        'length' => 60)),
+    'primary key' => array('uid'));
+
+  return $schema;
+}
+
+/**
+ * Perform additional installation actions for the module.
+ *
+ * @see hook_install()
+ */
+function yubikey_login_install() {
+  $t = get_t();
+	$config_url = url('admin/config/people/yubikey-login');
+
+	variable_set('yubikey_login_require_otp_credentials', FALSE);
+	variable_set('yubikey_login_no_backup_codes_warning', TRUE);
+	variable_set('yubikey_login_all_users_have_credentials', FALSE);
+
+  drupal_set_message($t('YubiKey Login has been installed. You can configure it from the <a href="@config_url"><i>YubiKey Login settings</i> page</a>.', array('@config_url' => $config_url)));
+}
+
+/**
+ * Perform additional uninstallation actions for the module.
+ *
+ * @see hook_uninstall()
+ */
+function yubikey_login_uninstall() {
+  variable_del('yubikey_login_require_otp_credentials');
+	variable_del('yubikey_login_no_backup_codes_warning');
+	variable_del('yubikey_login_all_users_have_credentials');
+}

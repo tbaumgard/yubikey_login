@@ -1,0 +1,329 @@
+<?php
+/**
+ * @file yubikey_login.module
+ * A module for allowing users to log in using a YubiKey one-time password.
+ */
+
+// -----------------------------------------------------------------------------
+// Constants
+
+define('YUBIKEY_LOGIN_NUM_BACKUP_CODES', 5);
+define('YUBIKEY_LOGIN_FLOOD_UID_WINDOW', 600);
+define('YUBIKEY_LOGIN_FLOOD_UID_THRESHOLD', 10);
+define('YUBIKEY_LOGIN_FLOOD_IP_WINDOW', 3600);
+define('YUBIKEY_LOGIN_FLOOD_IP_THRESHOLD', 50);
+
+// -----------------------------------------------------------------------------
+// Includes
+
+require_once dirname(__FILE__) . '/includes/form.inc';
+require_once dirname(__FILE__) . '/includes/user.inc';
+
+// -----------------------------------------------------------------------------
+// Libraries
+
+/**
+ * Declare the library dependencies for the module.
+ *
+ * @return
+ *   The library dependencies for the module.
+ *
+ * @see hook_libraries_info()
+ */
+function yubikey_login_libraries_info() {
+  $libraries['php-encryption'] = array(
+    'name' => t('php-encryption'),
+    'vendor url' => 'https://github.com/defuse/php-encryption',
+    'download url' => 'https://github.com/defuse/php-encryption/archive/v2.0.3.zip',
+    'version arguments' => array(
+      'file' => 'composer.json',
+      'pattern' => '/"version": "([0-9a-zA-Z.-]+)"/'),
+    'files' => array(
+      'php' => array(
+        'vendor/autoload.php',
+        'src/Core.php',
+        'src/Crypto.php',
+        'src/DerivedKeys.php',
+        'src/Encoding.php',
+        'src/Exception/CryptoException.php',
+        'src/Exception/BadFormatException.php',
+        'src/Exception/EnvironmentIsBrokenException.php',
+        'src/Exception/IOException.php',
+        'src/Exception/WrongKeyOrModifiedCiphertextException.php',
+        'src/File.php',
+        'src/Key.php',
+        'src/KeyOrPassword.php',
+        'src/KeyProtectedByPassword.php',
+        'src/RuntimeTests.php')));
+
+  $libraries['yubilib'] = array(
+    'name' => t('yubilib'),
+    'vendor url' => 'https://github.com/tbaumgard/yubilib',
+    'download url' => 'https://github.com/tbaumgard/yubilib/archive/v1.0.0.zip',
+    'version arguments' => array(
+      'file' => 'yubilib.php',
+      'pattern' => '/version *= *"([0-9a-zA-Z.-]+)"/'),
+    'files' => array(
+      'php' => array(
+        'vendor/autoload.php')));
+
+  return $libraries;
+}
+
+/**
+ * Determine if the library dependencies for module are installed.
+ *
+ * @return
+ *   TRUE if the dependencies are installed and FALSE otherwise.
+ */
+function yubikey_login_are_libraries_installed() {
+  $php_encryption = libraries_detect('php-encryption');
+  $yubilib = libraries_detect('yubilib');
+
+  $installed = $php_encryption && !empty($php_encryption['installed']);
+  $installed = $installed && $yubilib && !empty($yubilib['installed']);
+
+  return $installed;
+}
+
+/**
+ * Load the library dependencies for the module. A log entry will be created and
+ * an exception will be thrown if the libraries couldn't be loaded.
+ *
+ * @return
+ *   TRUE if the dependencies were successfully loaded and FALSE otherwise.
+ *
+ * @throw YubiKey_Login_Exception
+ */
+function yubikey_login_load_libraries() {
+  $loaded = &drupal_static(__FUNCTION__);
+
+  if (!empty($loaded)) {
+    return TRUE;
+  }
+
+  $php_encryption = libraries_load('php-encryption');
+  $yubilib = libraries_load('yubilib');
+
+  $loaded = $php_encryption && !empty($php_encryption);
+  $loaded = $loaded && $yubilib && !empty($yubilib);
+
+  if (!$loaded) {
+    $message = t('The dependencies for the YubiKey Login module are not installed and loaded.');
+
+    watchdog('yubikey_login', $message, NULL, WATCHDOG_ERROR);
+    throw new YubiKey_Login_Exception($message);
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Hooks
+
+/**
+ * Declare the menu items for the module.
+ *
+ * @return
+ *   Array of menu items for the module.
+ *
+ * @see hook_menu()
+ */
+function yubikey_login_menu() {
+  $menu['admin/config/people/yubikey-login'] = array(
+    'title' => t('YubiKey Login settings'),
+    'description' => t('Configure YubiKey one-time password (OTP) and related settings.'),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('yubikey_login_form_admin_settings'),
+    'access arguments' => array('administer users'),
+    'type' => MENU_NORMAL_ITEM);
+
+  $menu['user/yubikey-login/use-backup-code'] = array(
+    'title' => t('Use backup code'),
+    'description' => t('Use a YubiKey Login backup code to gain access to an account.'),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('yubikey_login_form_use_backup_code_form'),
+    'access callback' => 'user_is_anonymous',
+    'type' => MENU_LOCAL_TASK);
+
+  $menu['user/%user/yubikey-login'] = array(
+    'title' => t('YubiKey Login'),
+    'description' => t('Manage YubiKey one-time password credentials and create or reset backup codes.'),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('yubikey_login_form_user_yubikey_login', 1),
+    'access callback' => 'user_edit_access',
+    'access arguments' => array(1),
+    'type' => MENU_LOCAL_TASK);
+
+  $menu['user/%user/yubikey-login/clear'] = array(
+    'title' => t('Clear YubiKey credentials'),
+    'description' => t('Clear YubiKey credentials from an account.'),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('yubikey_login_form_user_yubikey_login_clear', 1),
+    'access callback' => 'user_edit_access',
+    'access arguments' => array(1),
+    'type' => MENU_LOCAL_TASK);
+
+  return $menu;
+}
+
+/**
+ * Declare which paths in the module should use the admin theme.
+ *
+ * @return
+ *   Array of path expressions.
+ *
+ * @see hook_admin_paths()
+ */
+function yubikey_login_admin_paths() {
+	$paths['user/*/yubikey-login'] = TRUE;
+	$paths['user/*/yubikey-login/clear'] = TRUE;
+
+	return $paths;
+}
+
+/**
+ * Perform periodic maintenance tasks when cron is run.
+ *
+ * @see hook_cron()
+ */
+function yubikey_login_cron() {
+	yubikey_login_user_perform_data_maintenance();
+}
+
+/**
+ * Alter pages for the module.
+ *
+ * @param $page
+ *   Page elements.
+ *
+ * @see hook_page_alter()
+ */
+function yubikey_login_page_alter($page) {
+  // Display a warning to the current user about missing YubiKey credentials if
+  // the user doesn't have them set and they're required.
+  if (preg_match('/^user\\/\\d+\\/yubikey-login$/', current_path()) != 1) {
+    if (user_is_logged_in() && variable_get('yubikey_login_require_otp_credentials', FALSE)) {
+      $user_uid = $GLOBALS['user']->uid;
+      $user_config_url = url("user/{$user_uid}/yubikey-login");
+
+      if (!yubikey_login_user_has_credentials($user_uid)) {
+        drupal_set_message(t('<a href="@user_config_url">Add your YubiKey credentials</a> to your account to enable multi-factor authentication.', array('@user_config_url' => $user_config_url)), 'warning');
+      }
+    }
+  }
+}
+
+/**
+ * Set up user data when a user account is created.
+ *
+ * @param $edit
+ *   Array of form values submitted by the user.
+ * @param $account
+ *   User account that is being created.
+ * @param $category
+ *   Active category of user information being created.
+ *
+ * @see hook_user_insert()
+ */
+function yubikey_login_user_insert(&$edit, $account, $category) {
+	yubikey_login_user_setup_user_data($account->uid);
+}
+
+/**
+ * Remove user data when a user account is deleted.
+ *
+ * @param $account
+ *   User account that is being deleted.
+ *
+ * @see hook_user_delete()
+ */
+function yubikey_login_user_delete($account) {
+	yubikey_login_user_remove_user_data($account->uid);
+}
+
+/**
+ * Composes a email message for the module.
+ *
+ * @param $key
+ *   A key to identify the e-mail sent.
+ * @param &$message
+ *   Details of the message.
+ * @param $params
+ *   Parameters to build the message.
+ *
+ * @see hook_mail()
+ */
+function yubikey_login_mail($key, &$message, $params) {
+	$account = $params['account'];
+
+	$variables['!account_name'] = $account->name;
+	$variables['!site_name'] = variable_get('site_name');
+	$variables['!site_url'] = url('<front>', array('absolute' => TRUE));
+	$options['langcode'] = $message['language']->language;
+
+	if ($key == 'added_credentials') {
+		$message['subject'] = t('Added one-time password credentials on !site_name', $variables, $options);
+		$message['body'][] = t("New one-time password credentials were added to your account, !account_name, on !site_name. Please contact the site administrator if you didn't add them yourself.\n\n!site_name\n!site_url", $variables, $options);
+	}
+	elseif ($key == 'updated_credentials') {
+		$message['subject'] = t('Updated one-time password credentials on !site_name', $variables, $options);
+		$message['body'][] = t("Updated one-time password credentials were added to your account, !account_name, on !site_name. Please contact the site administrator if you didn't update them yourself.\n\n!site_name\n!site_url", $variables, $options);
+	}
+	elseif ($key == 'removed_credentials') {
+		$message['subject'] = t('Removed one-time password credentials on !site_name', $variables, $options);
+		$message['body'][] = t("The one-time password credentials have been removed from your account, !account_name, on !site_name. Please contact the site administrator if you didn't remove them yourself.\n\n!site_name\n!site_url", $variables, $options);
+	}
+	elseif ($key == 'set_backup_codes') {
+		$message['subject'] = t('Created backup codes on !site_name', $variables, $options);
+		$message['body'][] = t("New backup codes were created for your account, !account_name, on !site_name. Please contact the site administrator if you didn't create them yourself.\n\n!site_name\n!site_url", $variables, $options);
+	}
+	elseif ($key == 'used_backup_code') {
+		$message['subject'] = t('Backup code used on !site_name', $variables, $options);
+		$message['body'][] = t("A backup code was used to access your account, !account_name, on !site_name. Please contact the site administrator if you didn't use a backup code to access your account.\n\n!site_name\n!site_url", $variables, $options);
+	}
+}
+
+// -----------------------------------------------------------------------------
+// Helpers
+
+/**
+ * Log an exception, handling any nested exceptions.
+ *
+ * @param $exception
+ *   Exception to log.
+ * @param $uid
+ *   UID of the user associated with the exception
+ */
+function yubikey_login_log_exception($exception, $uid) {
+	$account = user_load($uid);
+  $error = $exception->getMessage();
+  $previous_exception = $exception->getPrevious();
+
+  if ($previous_exception instanceof Defuse\Crypto\Exception\CryptoException) {
+    $error = $previous_exception->getMessage();
+    $previous_exception = $previous_exception->getPrevious();
+  }
+
+	if (!empty($account)) {
+		$message = t('A YubiKey Login error occurred for <a href="@user_url">%user_name</a>: @error.', array('@error' => $error, '@user_url' => url("user/{$uid}"), '%user_name' => $user->name));
+	}
+	else {
+		$message = t('A YubiKey Login error occurred: @error.', array('@error' => $error));
+	}
+
+  watchdog('yubikey_login', $message, NULL, WATCHDOG_ERROR);
+}
+
+/**
+ * Send a notification to a user account.
+ *
+ * @param $type
+ *   Notification type.
+ * @param $account
+ *   User account.
+ */
+function yubikey_login_send_notification($type, $account) {
+	$params['account'] = $account;
+	$to = $account->mail;
+	$language = language_default();
+	$message = drupal_mail('yubikey_login', $type, $to, $language, $params, FALSE);
+}
