@@ -69,11 +69,11 @@ function yubikey_login_schema() {
  */
 function yubikey_login_install() {
   $t = get_t();
-	$config_url = url('admin/config/people/yubikey-login');
+  $config_url = url('admin/config/people/yubikey-login');
 
-	variable_set('yubikey_login_require_otp_credentials', FALSE);
-	variable_set('yubikey_login_no_backup_codes_warning', TRUE);
-	variable_set('yubikey_login_all_users_have_credentials', FALSE);
+  variable_set('yubikey_login_require_otp_credentials', FALSE);
+  variable_set('yubikey_login_no_backup_codes_warning', TRUE);
+  variable_set('yubikey_login_all_users_have_credentials', FALSE);
 
   drupal_set_message($t('YubiKey Login has been installed. You can configure it from the <a href="@config_url"><i>YubiKey Login settings</i> page</a>.', array('@config_url' => $config_url)));
 }
@@ -85,6 +85,6 @@ function yubikey_login_install() {
  */
 function yubikey_login_uninstall() {
   variable_del('yubikey_login_require_otp_credentials');
-	variable_del('yubikey_login_no_backup_codes_warning');
-	variable_del('yubikey_login_all_users_have_credentials');
+  variable_del('yubikey_login_no_backup_codes_warning');
+  variable_del('yubikey_login_all_users_have_credentials');
 }

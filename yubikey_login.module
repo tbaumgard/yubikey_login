@@ -174,10 +174,10 @@ function yubikey_login_menu() {
  * @see hook_admin_paths()
  */
 function yubikey_login_admin_paths() {
-	$paths['user/*/yubikey-login'] = TRUE;
-	$paths['user/*/yubikey-login/clear'] = TRUE;
+  $paths['user/*/yubikey-login'] = TRUE;
+  $paths['user/*/yubikey-login/clear'] = TRUE;
 
-	return $paths;
+  return $paths;
 }
 
 /**
@@ -186,7 +186,7 @@ function yubikey_login_admin_paths() {
  * @see hook_cron()
  */
 function yubikey_login_cron() {
-	yubikey_login_user_perform_data_maintenance();
+  yubikey_login_user_perform_data_maintenance();
 }
 
 /**
@@ -225,7 +225,7 @@ function yubikey_login_page_alter($page) {
  * @see hook_user_insert()
  */
 function yubikey_login_user_insert(&$edit, $account, $category) {
-	yubikey_login_user_setup_user_data($account->uid);
+  yubikey_login_user_setup_user_data($account->uid);
 }
 
 /**
@@ -237,7 +237,7 @@ function yubikey_login_user_insert(&$edit, $account, $category) {
  * @see hook_user_delete()
  */
 function yubikey_login_user_delete($account) {
-	yubikey_login_user_remove_user_data($account->uid);
+  yubikey_login_user_remove_user_data($account->uid);
 }
 
 /**
@@ -253,33 +253,33 @@ function yubikey_login_user_delete($account) {
  * @see hook_mail()
  */
 function yubikey_login_mail($key, &$message, $params) {
-	$account = $params['account'];
+  $account = $params['account'];
 
-	$variables['!account_name'] = $account->name;
-	$variables['!site_name'] = variable_get('site_name');
-	$variables['!site_url'] = url('<front>', array('absolute' => TRUE));
-	$options['langcode'] = $message['language']->language;
+  $variables['!account_name'] = $account->name;
+  $variables['!site_name'] = variable_get('site_name');
+  $variables['!site_url'] = url('<front>', array('absolute' => TRUE));
+  $options['langcode'] = $message['language']->language;
 
-	if ($key == 'added_credentials') {
-		$message['subject'] = t('Added one-time password credentials on !site_name', $variables, $options);
-		$message['body'][] = t("New one-time password credentials were added to your account, !account_name, on !site_name. Please contact the site administrator if you didn't add them yourself.\n\n!site_name\n!site_url", $variables, $options);
-	}
-	elseif ($key == 'updated_credentials') {
-		$message['subject'] = t('Updated one-time password credentials on !site_name', $variables, $options);
-		$message['body'][] = t("Updated one-time password credentials were added to your account, !account_name, on !site_name. Please contact the site administrator if you didn't update them yourself.\n\n!site_name\n!site_url", $variables, $options);
-	}
-	elseif ($key == 'removed_credentials') {
-		$message['subject'] = t('Removed one-time password credentials on !site_name', $variables, $options);
-		$message['body'][] = t("The one-time password credentials have been removed from your account, !account_name, on !site_name. Please contact the site administrator if you didn't remove them yourself.\n\n!site_name\n!site_url", $variables, $options);
-	}
-	elseif ($key == 'set_backup_codes') {
-		$message['subject'] = t('Created backup codes on !site_name', $variables, $options);
-		$message['body'][] = t("New backup codes were created for your account, !account_name, on !site_name. Please contact the site administrator if you didn't create them yourself.\n\n!site_name\n!site_url", $variables, $options);
-	}
-	elseif ($key == 'used_backup_code') {
-		$message['subject'] = t('Backup code used on !site_name', $variables, $options);
-		$message['body'][] = t("A backup code was used to access your account, !account_name, on !site_name. Please contact the site administrator if you didn't use a backup code to access your account.\n\n!site_name\n!site_url", $variables, $options);
-	}
+  if ($key == 'added_credentials') {
+    $message['subject'] = t('Added one-time password credentials on !site_name', $variables, $options);
+    $message['body'][] = t("New one-time password credentials were added to your account, !account_name, on !site_name. Please contact the site administrator if you didn't add them yourself.\n\n!site_name\n!site_url", $variables, $options);
+  }
+  elseif ($key == 'updated_credentials') {
+    $message['subject'] = t('Updated one-time password credentials on !site_name', $variables, $options);
+    $message['body'][] = t("Updated one-time password credentials were added to your account, !account_name, on !site_name. Please contact the site administrator if you didn't update them yourself.\n\n!site_name\n!site_url", $variables, $options);
+  }
+  elseif ($key == 'removed_credentials') {
+    $message['subject'] = t('Removed one-time password credentials on !site_name', $variables, $options);
+    $message['body'][] = t("The one-time password credentials have been removed from your account, !account_name, on !site_name. Please contact the site administrator if you didn't remove them yourself.\n\n!site_name\n!site_url", $variables, $options);
+  }
+  elseif ($key == 'set_backup_codes') {
+    $message['subject'] = t('Created backup codes on !site_name', $variables, $options);
+    $message['body'][] = t("New backup codes were created for your account, !account_name, on !site_name. Please contact the site administrator if you didn't create them yourself.\n\n!site_name\n!site_url", $variables, $options);
+  }
+  elseif ($key == 'used_backup_code') {
+    $message['subject'] = t('Backup code used on !site_name', $variables, $options);
+    $message['body'][] = t("A backup code was used to access your account, !account_name, on !site_name. Please contact the site administrator if you didn't use a backup code to access your account.\n\n!site_name\n!site_url", $variables, $options);
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -294,7 +294,7 @@ function yubikey_login_mail($key, &$message, $params) {
  *   UID of the user associated with the exception
  */
 function yubikey_login_log_exception($exception, $uid) {
-	$account = user_load($uid);
+  $account = user_load($uid);
   $error = $exception->getMessage();
   $previous_exception = $exception->getPrevious();
 
@@ -303,12 +303,12 @@ function yubikey_login_log_exception($exception, $uid) {
     $previous_exception = $previous_exception->getPrevious();
   }
 
-	if (!empty($account)) {
-		$message = t('A YubiKey Login error occurred for <a href="@user_url">%user_name</a>: @error.', array('@error' => $error, '@user_url' => url("user/{$uid}"), '%user_name' => $user->name));
-	}
-	else {
-		$message = t('A YubiKey Login error occurred: @error.', array('@error' => $error));
-	}
+  if (!empty($account)) {
+    $message = t('A YubiKey Login error occurred for <a href="@user_url">%user_name</a>: @error.', array('@error' => $error, '@user_url' => url("user/{$uid}"), '%user_name' => $user->name));
+  }
+  else {
+    $message = t('A YubiKey Login error occurred: @error.', array('@error' => $error));
+  }
 
   watchdog('yubikey_login', $message, NULL, WATCHDOG_ERROR);
 }
@@ -322,8 +322,8 @@ function yubikey_login_log_exception($exception, $uid) {
  *   User account.
  */
 function yubikey_login_send_notification($type, $account) {
-	$params['account'] = $account;
-	$to = $account->mail;
-	$language = language_default();
-	$message = drupal_mail('yubikey_login', $type, $to, $language, $params, FALSE);
+  $params['account'] = $account;
+  $to = $account->mail;
+  $language = language_default();
+  $message = drupal_mail('yubikey_login', $type, $to, $language, $params, FALSE);
 }
